@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>進行表管理システム</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #4CAF50;
+      padding-bottom: 10px;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    h1:hover {
+      color: #4CAF50;
+    }
+    h2 {
+      color: #555;
+      margin-top: 30px;
+    }
+    
+    /* フィルターエリア */
+    .filter-area {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 15px;
+      flex-wrap: wrap;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .filter-area input,
+    .filter-area select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .filter-area input {
+      width: 200px;
+    }
+    
+    /* テーブル共通 */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+    th {
+      background-color: #4CAF50;
+      color: white;
+      font-weight: 600;
+    }
+    tr:hover {
+      background-color: #f9f9f9;
+    }
+    
+    /* クリック可能な行 */
+    .clickable-row {
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .clickable-row:hover {
+      background-color: #e8f5e9;
+    }
+    .clickable-row td:first-child {
+      position: relative;
+      padding-left: 24px;
+    }
+    .clickable-row td:first-child::before {
+      content: '▶';
+      position: absolute;
+      left: 8px;
+      color: #4CAF50;
+      font-size: 10px;
+    }
+    
+    /* ボタン */
+    button {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: opacity 0.2s;
+    }
+    button:hover {
+      opacity: 0.8;
+    }
+    .btn-primary {
+      background-color: #4CAF50;
+      color: white;
+    }
+    .btn-edit {
+      background-color: #2196F3;
+      color: white;
+    }
+    .btn-delete {
+      background-color: #f44336;
+      color: white;
+    }
+    .btn-add {
+      background-color: #FF9800;
+      color: white;
+      padding: 10px 20px;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+    
+    /* モーダル */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+    .modal {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal h3 {
+      margin-top: 0;
+      color: #333;
+    }
+    .modal label {
+      display: block;
+      margin-top: 15px;
+      font-weight: 600;
+      color: #555;
+    }
+    .modal input,
+    .modal select {
+      width: 100%;
+      padding: 10px;
+      margin-top: 5px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .modal-buttons {
+      margin-top: 25px;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    .modal .btn-cancel {
+      background-color: #9e9e9e;
+      color: white;
+    }
+    
+    /* ローディング */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+    }
+    
+    /* 件数表示 */
+    .count {
+      color: #888;
+      font-size: 14px;
+      margin-bottom: 10px;
+    }
+    
+    /* リンクヒント */
+    .link-hint {
+      color: #888;
+      font-size: 12px;
+      margin-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1 onclick="location.href='index.html'">📚 進行表管理システム</h1>
+  
+  <!-- フィルター -->
+  <div class="filter-area">
+    <input type="text" id="searchInput" placeholder="教材名で検索...">
+    <select id="schoolTypeFilter">
+      <option value="">学校種別: 全て</option>
+      <option value="小学">小学</option>
+      <option value="中学">中学</option>
+      <option value="高校">高校</option>
+    </select>
+    <select id="gradeFilter">
+      <option value="">学年: 全て</option>
+      <option value="1年">1年</option>
+      <option value="2年">2年</option>
+      <option value="3年">3年</option>
+      <option value="4年">4年</option>
+      <option value="5年">5年</option>
+      <option value="6年">6年</option>
+      <option value="共通">共通</option>
+    </select>
+    <select id="subjectFilter">
+      <option value="">科目: 全て</option>
+      <option value="国語">国語</option>
+      <option value="数学">数学</option>
+      <option value="英語">英語</option>
+      <option value="理科">理科</option>
+      <option value="社会">社会</option>
+    </select>
+    <button class="btn-primary" onclick="loadTextbooks()">検索</button>
+  </div>
+  
+  <!-- 教材一覧 -->
+  <h2>教材一覧 <span class="link-hint">※行をクリックでカリキュラムを表示</span></h2>
+  <div class="count" id="textbookCount"></div>
+  <table id="textbookTable">
+    <thead>
+      <tr>
+        <th>教材名</th>
+        <th>準拠</th>
+        <th>学年</th>
+        <th>科目</th>
+        <th>改訂日</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="textbookBody">
+      <tr><td colspan="6" class="loading">読み込み中...</td></tr>
+    </tbody>
+  </table>
+  <button class="btn-add" onclick="openAddTextbookModal()">+ 教材を追加</button>
+  
+  <!-- 教材編集モーダル -->
+  <div class="modal-overlay" id="textbookModal">
+    <div class="modal">
+      <h3 id="textbookModalTitle">教材を編集</h3>
+      <input type="hidden" id="textbookId">
+      <label>教材名</label>
+      <input type="text" id="textbookName">
+      <label>準拠</label>
+      <input type="text" id="textbookPublisher" placeholder="例: 光村図書">
+      <label>学校種別</label>
+      <select id="textbookSchoolType">
+        <option value="小学">小学</option>
+        <option value="中学">中学</option>
+        <option value="高校">高校</option>
+      </select>
+      <label>学年</label>
+      <input type="text" id="textbookGrade" placeholder="例: 3年, 共通">
+      <label>科目</label>
+      <select id="textbookSubject">
+        <option value="国語">国語</option>
+        <option value="数学">数学</option>
+        <option value="英語">英語</option>
+        <option value="理科">理科</option>
+        <option value="社会">社会</option>
+      </select>
+      <label>改訂日</label>
+      <input type="text" id="textbookRevisionDate" placeholder="例: 20250211">
+      <div class="modal-buttons">
+        <button class="btn-cancel" onclick="closeModal('textbookModal')">キャンセル</button>
+        <button class="btn-primary" onclick="saveTextbook()">保存</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Supabase設定
+    const SUPABASE_URL = 'https://mzxysqkuuxcfffwlfsvj.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im16eHlzcWt1dXhjZmZmd2xmc3ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc3ODQ5MDIsImV4cCI6MjA4MzM2MDkwMn0.w9uCR16YA-XHxzMQJZuK5qdDGKgrhGDElHF3kmh4yrE';
+    
+    // ========== API呼び出し ==========
+    
+    async function supabaseGet(table, query = '') {
+      const url = `${SUPABASE_URL}/rest/v1/${table}?${query}`;
+      const response = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`
+        }
+      });
+      return response.json();
+    }
+    
+    async function supabaseInsert(table, data) {
+      const url = `${SUPABASE_URL}/rest/v1/${table}`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(data)
+      });
+      return response.json();
+    }
+    
+    async function supabaseUpdate(table, id, data) {
+      const url = `${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`;
+      const response = await fetch(url, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(data)
+      });
+      return response.json();
+    }
+    
+    async function supabaseDelete(table, id) {
+      const url = `${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`;
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`
+        }
+      });
+      return response.ok;
+    }
+    
+    // ========== 教材 ==========
+    
+    async function loadTextbooks() {
+      const search = document.getElementById('searchInput').value;
+      const schoolType = document.getElementById('schoolTypeFilter').value;
+      const grade = document.getElementById('gradeFilter').value;
+      const subject = document.getElementById('subjectFilter').value;
+      
+      let query = 'order=school_type,grade,subject,name';
+      if (search) query += `&name=ilike.*${search}*`;
+      if (schoolType) query += `&school_type=eq.${schoolType}`;
+      if (grade) query += `&grade=eq.${grade}`;
+      if (subject) query += `&subject=eq.${subject}`;
+      
+      const textbooks = await supabaseGet('textbooks', query);
+      
+      document.getElementById('textbookCount').textContent = `${textbooks.length}件`;
+      
+      const tbody = document.getElementById('textbookBody');
+      if (textbooks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="loading">データがありません</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = textbooks.map(t => `
+        <tr class="clickable-row" onclick="openCurriculum(${t.id})">
+          <td>${escapeHtml(t.name)}</td>
+          <td>${escapeHtml(t.publisher || '-')}</td>
+          <td>${t.school_type}${t.grade}</td>
+          <td>${t.subject}</td>
+          <td>${t.revision_date || '-'}</td>
+          <td>
+            <button class="btn-edit" onclick="event.stopPropagation(); openEditTextbookModal(${t.id})">編集</button>
+            <button class="btn-delete" onclick="event.stopPropagation(); deleteTextbook(${t.id})">削除</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+    
+    function openCurriculum(id) {
+      window.location.href = `curriculum.html?id=${id}`;
+    }
+    
+    async function openEditTextbookModal(id) {
+      const textbooks = await supabaseGet('textbooks', `id=eq.${id}`);
+      if (textbooks.length === 0) return;
+      
+      const t = textbooks[0];
+      document.getElementById('textbookModalTitle').textContent = '教材を編集';
+      document.getElementById('textbookId').value = t.id;
+      document.getElementById('textbookName').value = t.name;
+      document.getElementById('textbookPublisher').value = t.publisher || '';
+      document.getElementById('textbookSchoolType').value = t.school_type;
+      document.getElementById('textbookGrade').value = t.grade;
+      document.getElementById('textbookSubject').value = t.subject;
+      document.getElementById('textbookRevisionDate').value = t.revision_date || '';
+      
+      document.getElementById('textbookModal').classList.add('active');
+    }
+    
+    function openAddTextbookModal() {
+      document.getElementById('textbookModalTitle').textContent = '教材を追加';
+      document.getElementById('textbookId').value = '';
+      document.getElementById('textbookName').value = '';
+      document.getElementById('textbookPublisher').value = '';
+      document.getElementById('textbookSchoolType').value = '中学';
+      document.getElementById('textbookGrade').value = '';
+      document.getElementById('textbookSubject').value = '数学';
+      document.getElementById('textbookRevisionDate').value = '';
+      
+      document.getElementById('textbookModal').classList.add('active');
+    }
+    
+    async function saveTextbook() {
+      const id = document.getElementById('textbookId').value;
+      const data = {
+        name: document.getElementById('textbookName').value,
+        publisher: document.getElementById('textbookPublisher').value || null,
+        school_type: document.getElementById('textbookSchoolType').value,
+        grade: document.getElementById('textbookGrade').value,
+        subject: document.getElementById('textbookSubject').value,
+        revision_date: document.getElementById('textbookRevisionDate').value || null
+      };
+      
+      if (!data.name || !data.grade) {
+        alert('教材名と学年は必須です');
+        return;
+      }
+      
+      if (id) {
+        await supabaseUpdate('textbooks', id, data);
+      } else {
+        await supabaseInsert('textbooks', data);
+      }
+      
+      closeModal('textbookModal');
+      loadTextbooks();
+    }
+    
+    async function deleteTextbook(id) {
+      if (!confirm('この教材を削除しますか？\n（紐づくカリキュラムも全て削除されます）')) return;
+      
+      await supabaseDelete('textbooks', id);
+      loadTextbooks();
+    }
+    
+    // ========== ユーティリティ ==========
+    
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+    
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+    }
+    
+    // モーダル外クリックで閉じる
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          overlay.classList.remove('active');
+        }
+      });
+    });
+    
+    // 初期読み込み
+    loadTextbooks();
+  </script>
+</body>
+</html>
