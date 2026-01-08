@@ -122,6 +122,13 @@
       font-size: 14px;
       margin-top: 10px;
     }
+    .btn-bulk {
+      background-color: #9C27B0;
+      color: white;
+      padding: 10px 20px;
+      font-size: 14px;
+      margin-top: 10px;
+    }
     .btn-back {
       background-color: #9e9e9e;
       color: white;
@@ -180,6 +187,9 @@
       max-height: 90vh;
       overflow-y: auto;
     }
+    .modal.modal-large {
+      max-width: 700px;
+    }
     .modal h3 {
       margin-top: 0;
       color: #333;
@@ -191,13 +201,19 @@
       color: #555;
     }
     .modal input,
-    .modal select {
+    .modal select,
+    .modal textarea {
       width: 100%;
       padding: 10px;
       margin-top: 5px;
       border: 1px solid #ddd;
       border-radius: 4px;
       font-size: 14px;
+    }
+    .modal textarea {
+      min-height: 200px;
+      font-family: monospace;
+      line-height: 1.5;
     }
     .modal-buttons {
       margin-top: 25px;
@@ -208,6 +224,51 @@
     .modal .btn-cancel {
       background-color: #9e9e9e;
       color: white;
+    }
+    
+    /* ヒント */
+    .hint {
+      font-size: 12px;
+      color: #888;
+      margin-top: 5px;
+    }
+    .hint code {
+      background: #f5f5f5;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    
+    /* プレビュー */
+    .preview-area {
+      margin-top: 15px;
+      padding: 15px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .preview-area h4 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      color: #555;
+    }
+    .preview-item {
+      padding: 5px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+    }
+    .preview-item:last-child {
+      border-bottom: none;
+    }
+    .preview-item .num {
+      color: #4CAF50;
+      font-weight: bold;
+      margin-right: 8px;
+    }
+    .preview-item .type {
+      font-size: 11px;
+      color: #888;
+      margin-left: 8px;
     }
     
     /* ローディング */
@@ -262,7 +323,8 @@
   
   <div style="margin-top: 20px;">
     <button class="btn-back" onclick="location.href='index.html'">← 教材一覧に戻る</button>
-    <button class="btn-add" onclick="openAddCurriculumModal()">+ カリキュラムを追加</button>
+    <button class="btn-add" onclick="openAddCurriculumModal()">+ 1件追加</button>
+    <button class="btn-bulk" onclick="openBulkAddModal()">📋 一括登録</button>
   </div>
   
   <!-- カリキュラム編集モーダル -->
@@ -284,6 +346,54 @@
       <div class="modal-buttons">
         <button class="btn-cancel" onclick="closeModal('curriculumModal')">キャンセル</button>
         <button class="btn-primary" onclick="saveCurriculum()">保存</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 一括登録モーダル -->
+  <div class="modal-overlay" id="bulkModal">
+    <div class="modal modal-large">
+      <h3>📋 カリキュラム一括登録</h3>
+      
+      <label>データ形式</label>
+      <select id="bulkFormat" onchange="updatePreview()">
+        <option value="auto">自動判定</option>
+        <option value="title_only">タイトルのみ（1行1件）</option>
+        <option value="num_title">番号 タイトル（タブ区切り）</option>
+        <option value="num_title_type">番号 タイトル タイプ（タブ区切り）</option>
+      </select>
+      
+      <label>データを貼り付け</label>
+      <textarea id="bulkData" placeholder="ExcelやWebからコピーしたデータを貼り付けてください
+
+例1：タイトルのみ
+動詞
+未来の文
+助動詞
+
+例2：番号とタイトル（Excelからコピー）
+1	動詞
+2	未来の文
+3	助動詞
+
+例3：章タイトル混在
+１・２年の復習
+1	動詞
+2	未来の文
+◆まとめテスト" oninput="updatePreview()"></textarea>
+      
+      <div class="hint">
+        💡 自動判定：行頭が数字なら <code>lesson</code>、◆なら <code>summary</code>、■や特別講座なら <code>special</code>、それ以外は <code>chapter</code>
+      </div>
+      
+      <div class="preview-area" id="previewArea" style="display:none;">
+        <h4>プレビュー（<span id="previewCount">0</span>件）</h4>
+        <div id="previewList"></div>
+      </div>
+      
+      <div class="modal-buttons">
+        <button class="btn-cancel" onclick="closeModal('bulkModal')">キャンセル</button>
+        <button class="btn-primary" onclick="saveBulkCurriculum()">登録する</button>
       </div>
     </div>
   </div>
@@ -466,6 +576,162 @@
       
       await supabaseDelete('curriculum_items', id);
       loadCurriculum();
+    }
+    
+    // ========== 一括登録 ==========
+    
+    function openBulkAddModal() {
+      document.getElementById('bulkData').value = '';
+      document.getElementById('bulkFormat').value = 'auto';
+      document.getElementById('previewArea').style.display = 'none';
+      document.getElementById('bulkModal').classList.add('active');
+    }
+    
+    function parseBulkData() {
+      const raw = document.getElementById('bulkData').value;
+      const format = document.getElementById('bulkFormat').value;
+      const lines = raw.split('\n').filter(line => line.trim() !== '');
+      
+      const items = [];
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        
+        let itemNumber = null;
+        let title = trimmed;
+        let itemType = 'chapter';
+        
+        if (format === 'title_only') {
+          // タイトルのみ
+          title = trimmed;
+          itemType = detectItemType(null, title);
+        } else if (format === 'num_title' || format === 'num_title_type') {
+          // タブ区切り
+          const parts = trimmed.split('\t');
+          if (parts.length >= 2) {
+            itemNumber = parts[0].trim() || null;
+            title = parts[1].trim();
+            if (format === 'num_title_type' && parts[2]) {
+              itemType = parts[2].trim();
+            } else {
+              itemType = detectItemType(itemNumber, title);
+            }
+          } else {
+            title = trimmed;
+            itemType = detectItemType(null, title);
+          }
+        } else {
+          // 自動判定
+          const parts = trimmed.split('\t');
+          if (parts.length >= 2) {
+            // タブ区切りあり
+            itemNumber = parts[0].trim() || null;
+            title = parts[1].trim();
+            itemType = detectItemType(itemNumber, title);
+          } else {
+            // タブ区切りなし - 行頭の数字をチェック
+            const match = trimmed.match(/^(\d+)\s+(.+)$/);
+            if (match) {
+              itemNumber = match[1];
+              title = match[2];
+              itemType = 'lesson';
+            } else {
+              title = trimmed;
+              itemType = detectItemType(null, title);
+            }
+          }
+        }
+        
+        items.push({ itemNumber, title, itemType });
+      }
+      
+      return items;
+    }
+    
+    function detectItemType(itemNumber, title) {
+      // 番号があればlesson
+      if (itemNumber && /^\d+$/.test(itemNumber)) {
+        return 'lesson';
+      }
+      
+      // タイトルで判定
+      if (title.startsWith('◆')) {
+        return 'summary';
+      }
+      if (title.startsWith('■') || title.startsWith('特別講座')) {
+        return 'special';
+      }
+      
+      // 行頭が数字ならlesson
+      if (/^[\d０-９]+/.test(title)) {
+        return 'lesson';
+      }
+      
+      return 'chapter';
+    }
+    
+    function updatePreview() {
+      const items = parseBulkData();
+      const previewArea = document.getElementById('previewArea');
+      const previewList = document.getElementById('previewList');
+      const previewCount = document.getElementById('previewCount');
+      
+      if (items.length === 0) {
+        previewArea.style.display = 'none';
+        return;
+      }
+      
+      previewArea.style.display = 'block';
+      previewCount.textContent = items.length;
+      
+      previewList.innerHTML = items.map(item => `
+        <div class="preview-item">
+          <span class="num">${item.itemNumber || '-'}</span>
+          ${escapeHtml(item.title)}
+          <span class="type badge badge-${item.itemType}">${item.itemType}</span>
+        </div>
+      `).join('');
+    }
+    
+    async function saveBulkCurriculum() {
+      const items = parseBulkData();
+      
+      if (items.length === 0) {
+        alert('データを入力してください');
+        return;
+      }
+      
+      if (!confirm(`${items.length}件のカリキュラムを登録しますか？`)) {
+        return;
+      }
+      
+      // 現在の最大sort_orderを取得
+      const existing = await supabaseGet('curriculum_items', `textbook_id=eq.${textbookId}&order=sort_order.desc&limit=1`);
+      let sortOrder = existing.length > 0 ? existing[0].sort_order : 0;
+      
+      // 登録データを作成
+      const insertData = items.map(item => {
+        sortOrder++;
+        return {
+          textbook_id: parseInt(textbookId),
+          sort_order: sortOrder,
+          item_number: item.itemNumber,
+          title: item.title,
+          item_type: item.itemType
+        };
+      });
+      
+      // 一括登録
+      const result = await supabaseInsert('curriculum_items', insertData);
+      
+      if (result && result.length > 0) {
+        alert(`${result.length}件を登録しました`);
+        closeModal('bulkModal');
+        loadCurriculum();
+      } else {
+        alert('登録に失敗しました');
+      }
     }
     
     // ========== ユーティリティ ==========
