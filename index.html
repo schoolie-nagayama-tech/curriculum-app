@@ -392,7 +392,7 @@
     }
     
     function openCurriculum(id) {
-      window.location.href = `curriculum.html?id=${id}`;
+      window.open(`curriculum.html?id=${id}`, '_blank');
     }
     
     async function openEditTextbookModal(id) {
@@ -486,4 +486,5 @@
     loadTextbooks();
   </script>
 </body>
+
 </html>
